@@ -1,0 +1,17 @@
+run:
+  name: heuristic_baseline
+  output_dir: results/heuristic
+  episodes: 20
+  max_steps: 1000
+  seed: 0
+
+env:
+  id: LunarLander-v3
+  render_mode: null
+  continuous: false
+  enable_wind: false
+  wind_power: 15.0
+  turbulence_power: 1.5
+
+policy:
+  name: heuristic
