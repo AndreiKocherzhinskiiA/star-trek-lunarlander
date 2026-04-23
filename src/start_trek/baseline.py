@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
 import gymnasium as gym
+from gymnasium.wrappers import RecordVideo
 import numpy as np
 from start_trek.config import ProjectConfig
 
@@ -62,15 +63,32 @@ class HeuristicPolicy:
         return 0
 
 
-def make_env(config: ProjectConfig) -> gym.Env:
+def make_env(config: ProjectConfig, output_dir: Path | None = None) -> gym.Env:
+    render_mode = config.env.render_mode
+    if config.video.enabled and render_mode != "rgb_array":
+        render_mode = "rgb_array"
+
     kwargs: dict[str, Any] = {
-        "render_mode": config.env.render_mode,
+        "render_mode": render_mode,
         "continuous": config.env.continuous,
         "enable_wind": config.env.enable_wind,
         "wind_power": config.env.wind_power,
         "turbulence_power": config.env.turbulence_power,
     }
-    return gym.make(config.env.id, **kwargs)
+    env = gym.make(config.env.id, **kwargs)
+
+    if config.video.enabled:
+        base_output_dir = output_dir or config.run.output_dir
+        video_dir = base_output_dir / "videos"
+        env = RecordVideo(
+            env,
+            video_folder=str(video_dir),
+            episode_trigger=lambda episode: episode % config.video.record_every == 0,
+            name_prefix=config.video.prefix,
+            disable_logger=True,
+        )
+
+    return env
 
 
 def build_policy(name: str, action_space) -> Policy:
@@ -110,7 +128,7 @@ def classify_termination(
 
 def run_policy(config: ProjectConfig, output_dir: Path | None = None) -> list[EpisodeRecord]:
     target_dir = output_dir or config.run.output_dir
-    env = make_env(config)
+    env = make_env(config, output_dir=target_dir)
     policy = build_policy(config.policy.name, env.action_space)
     records: list[EpisodeRecord] = []
 
@@ -201,9 +219,11 @@ def write_summary_csv(records: list[EpisodeRecord], path: Path) -> None:
         "truncated_count": sum(record.truncated for record in records),
     }
     for reason in reasons:
-        row[f"reason_{reason}_count"] = sum(
+        count = sum(
             record.termination_reason == reason for record in records
         )
+        row[f"reason_{reason}_count"] = count
+        row[f"reason_{reason}_rate"] = count / len(records)
 
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(row.keys()))

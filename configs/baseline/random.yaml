@@ -15,3 +15,8 @@ env:
 
 policy:
   name: random
+
+video:
+  enabled: true
+  record_every: 10
+  prefix: random_baseline

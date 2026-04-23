@@ -15,3 +15,8 @@ env:
 
 policy:
   name: heuristic
+
+video:
+  enabled: true
+  record_every: 10
+  prefix: heuristic_baseline

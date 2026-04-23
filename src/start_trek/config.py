@@ -15,6 +15,13 @@ class RunConfig:
 
 
 @dataclass(frozen=True)
+class VideoConfig:
+    enabled: bool
+    record_every: int
+    prefix: str
+
+
+@dataclass(frozen=True)
 class EnvConfig:
     id: str
     render_mode: str | None
@@ -34,6 +41,7 @@ class ProjectConfig:
     run: RunConfig
     env: EnvConfig
     policy: PolicyConfig
+    video: VideoConfig
 
     def to_json_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -52,6 +60,7 @@ def load_config(path: str | Path) -> ProjectConfig:
     run = raw.get("run", {})
     env = raw.get("env", {})
     policy = raw.get("policy", {})
+    video = raw.get("video", {})
 
     return ProjectConfig(
         run=RunConfig(
@@ -70,4 +79,9 @@ def load_config(path: str | Path) -> ProjectConfig:
             turbulence_power=float(env.get("turbulence_power", 1.5)),
         ),
         policy=PolicyConfig(name=str(policy["name"])),
+        video=VideoConfig(
+            enabled=bool(video.get("enabled", False)),
+            record_every=max(1, int(video.get("record_every", 1))),
+            prefix=str(video.get("prefix", "episode")),
+        ),
     )
