@@ -5,10 +5,7 @@ description = "Lunar Lander reinforcement-learning project scaffold."
 requires-python = ">=3.10"
 dependencies = [
     "gymnasium[box2d]>=1.0.0",
-    "numpy>=1.24",
-    "pandas>=2.0",
-    "PyYAML>=6.0",
-    "matplotlib>=3.8",
+    "torch>=2.0",
 ]
 
 [build-system]

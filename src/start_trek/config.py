@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-import yaml
 
 
 @dataclass(frozen=True)
@@ -51,8 +50,7 @@ class ProjectConfig:
 
 def load_config(path: str | Path) -> ProjectConfig:
     config_path = Path(path)
-    with config_path.open("r", encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle)
+    raw = parse_simple_yaml(config_path)
 
     if not isinstance(raw, dict):
         raise ValueError(f"Config must be a mapping: {config_path}")
@@ -85,3 +83,53 @@ def load_config(path: str | Path) -> ProjectConfig:
             prefix=str(video.get("prefix", "episode")),
         ),
     )
+
+
+def parse_simple_yaml(path: Path) -> dict[str, dict[str, object]]:
+    data: dict[str, dict[str, object]] = {}
+    current_section: str | None = None
+
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            line_without_comment = raw_line.split("#", 1)[0].rstrip()
+            if not line_without_comment.strip():
+                continue
+            indent = len(line_without_comment) - len(line_without_comment.lstrip(" "))
+            line = line_without_comment.strip()
+            if indent == 0:
+                if not line.endswith(":"):
+                    raise ValueError(f"Invalid section at {path}:{line_number}: {line}")
+                current_section = line[:-1]
+                data[current_section] = {}
+                continue
+            if current_section is None:
+                raise ValueError(f"Key outside section at {path}:{line_number}: {line}")
+            if ":" not in line:
+                raise ValueError(f"Invalid key/value at {path}:{line_number}: {line}")
+            key, value = line.split(":", 1)
+            data[current_section][key.strip()] = parse_scalar(value.strip())
+    return data
+
+
+def parse_scalar(value: str) -> object:
+    if value == "" or value == "null":
+        return None
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    quoted = (
+        len(value) >= 2
+        and value[0] == value[-1]
+        and value[0] in {"'", '"'}
+    )
+    if quoted:
+        return value[1:-1]
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        return value
