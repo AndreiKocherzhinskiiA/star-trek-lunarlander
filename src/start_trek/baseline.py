@@ -3,10 +3,11 @@ import csv
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Protocol, Sequence
+from typing import Any, Protocol, Sequence, cast
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
 from start_trek.config import ProjectConfig
+from start_trek.agent import PPOAgent
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,7 @@ class EpisodeRecord:
 
 
 class Policy(Protocol):
-    def act(self, observation: Sequence[float]) -> int:
+    def act(self, observation: Any) -> int:
         ...
 
 
@@ -74,12 +75,27 @@ def make_env(config: ProjectConfig, output_dir: Path | None = None) -> gym.Env:
             name_prefix=config.video.prefix, disable_logger=True,)
     return env
 
-def build_policy(name: str, action_space) -> Policy:
+def build_policy(
+    name: str,
+    observation_space: gym.Space,
+    action_space: gym.Space,
+    agent_path: str | Path | None = None,
+) -> Policy:
     normalized = name.lower().strip()
     if normalized == "random":
         return RandomPolicy(action_space)
     if normalized == "heuristic":
         return HeuristicPolicy()
+    if normalized == "ppo":
+        if agent_path:
+            return PPOAgent.load(agent_path, device="cpu")
+        else:
+            obs_shape = cast(Sequence[int] | None, getattr(observation_space, "shape", None))
+            if not obs_shape:
+                raise ValueError("PPO requires an observation space with a shape.")
+            obs_dim = int(obs_shape[0])
+            action_dim = int(cast(Any, action_space).n)
+            return PPOAgent(obs_dim, action_dim)
     raise ValueError(f"Unknown policy: {name}")
 
 def classify_termination(final_observation: Sequence[float],
@@ -101,10 +117,21 @@ def classify_termination(final_observation: Sequence[float],
         return "sleep"
     return "crash"
 
-def run_policy(config: ProjectConfig, output_dir: Path | None = None) -> list[EpisodeRecord]:
+def run_policy(
+    config: ProjectConfig,
+    output_dir: Path | None = None,
+    policy: Policy | None = None,
+) -> list[EpisodeRecord]:
     target_dir = output_dir or config.run.output_dir
     env = make_env(config, output_dir=target_dir)
-    policy = build_policy(config.policy.name, env.action_space)
+    if policy is None:
+        if config.policy.name.lower().strip() == "ppo":
+            obs_dim = int(cast(Sequence[int], env.observation_space.shape)[0])
+            action_dim = int(cast(Any, env.action_space).n)
+            policy = PPOAgent(obs_dim, action_dim)
+        else:
+            policy = build_policy(config.policy.name, env.observation_space, env.action_space)
+
     records: list[EpisodeRecord] = []
     try:
         for episode in range(config.run.episodes):
