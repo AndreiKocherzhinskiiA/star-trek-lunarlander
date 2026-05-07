@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from start_trek.baseline import run_policy, make_env, build_policy
 from start_trek.config import load_config
-from start_trek.agent import PPOAgent
+from start_trek.agent import PPOAgent, PPOPolicy
 
 
 def main() -> int:
@@ -23,7 +23,8 @@ def main() -> int:
     eval_config = replace(config, run=run_config)
     output_dir = Path(args.output_dir) if args.output_dir else config.run.output_dir / "eval"
 
-    env = make_env(config, output_dir=None)
+    probe_config = replace(config, video=replace(config.video, enabled=False))
+    env = make_env(probe_config, output_dir=None)
     policy = build_policy(
         config.policy.name,
         env.observation_space,
@@ -31,6 +32,9 @@ def main() -> int:
         agent_path=args.agent_path,
     )
     env.close()
+
+    if isinstance(policy, PPOAgent):
+        policy = PPOPolicy(policy.model)
 
     records = run_policy(eval_config, output_dir=output_dir, policy=policy)
     mean_return = sum(record.return_ for record in records) / len(records)
