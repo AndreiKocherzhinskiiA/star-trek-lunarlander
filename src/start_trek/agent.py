@@ -1,6 +1,5 @@
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -73,7 +72,7 @@ class PPOAgent:
         value_coef: float = 0.5,
         entropy_coef: float = 0.01,
         max_grad_norm: float = 0.5,
-    ) -> None:
+    ) -> dict[str, float]:
         """Perform PPO update on given batch tensors (already on correct device).
 
         obs: (N, obs_dim)
@@ -83,6 +82,11 @@ class PPOAgent:
         advantages: (N,)
         """
         N = obs.shape[0]
+        policy_loss_total = 0.0
+        value_loss_total = 0.0
+        entropy_total = 0.0
+        approx_kl_total = 0.0
+        updates = 0
         for _ in range(epochs):
             perm = torch.randperm(N, device=self.device)
             for start in range(0, N, minibatch_size):
@@ -97,6 +101,7 @@ class PPOAgent:
                 dist = Categorical(logits=logits)
                 new_log_probs = dist.log_prob(actions_mb)
                 entropy = dist.entropy().mean()
+                approx_kl = (old_lp_mb - new_log_probs).mean()
 
                 ratio = (new_log_probs - old_lp_mb).exp()
                 surr1 = ratio * adv_mb
@@ -111,6 +116,27 @@ class PPOAgent:
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
                 self.optimizer.step()
+
+                policy_loss_total += float(policy_loss.item())
+                value_loss_total += float(value_loss.item())
+                entropy_total += float(entropy.item())
+                approx_kl_total += float(approx_kl.item())
+                updates += 1
+
+        if updates == 0:
+            return {
+                "policy_loss": 0.0,
+                "value_loss": 0.0,
+                "entropy": 0.0,
+                "approx_kl": 0.0,
+            }
+
+        return {
+            "policy_loss": policy_loss_total / updates,
+            "value_loss": value_loss_total / updates,
+            "entropy": entropy_total / updates,
+            "approx_kl": approx_kl_total / updates,
+        }
 
     def save(self, path: str | Path) -> None:
         path = Path(path)
@@ -138,13 +164,12 @@ class PPOAgent:
         return agent
 
 class PPOPolicy:
-    def __init__(self, model):
+    def __init__(self, model: nn.Module):
         self.model = model
 
-    def act(self, observation):
+    def act(self, observation: np.ndarray) -> int:
         obs = torch.as_tensor(observation, dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():
             logits, _ = self.model(obs)
-        dist = Categorical(logits=logits)
         action = torch.argmax(logits, dim=-1)
         return int(action.item())

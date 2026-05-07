@@ -36,11 +36,28 @@ class PolicyConfig:
 
 
 @dataclass(frozen=True)
+class PPOConfig:
+    total_timesteps: int
+    steps_per_rollout: int
+    gamma: float
+    gae_lambda: float
+    learning_rate: float
+    update_epochs: int
+    minibatch_size: int
+    clip_epsilon: float
+    value_coef: float
+    entropy_coef: float
+    max_grad_norm: float
+    log_every_updates: int
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     run: RunConfig
     env: EnvConfig
     policy: PolicyConfig
     video: VideoConfig
+    ppo: PPOConfig
 
     def to_json_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -59,6 +76,7 @@ def load_config(path: str | Path) -> ProjectConfig:
     env = raw.get("env", {})
     policy = raw.get("policy", {})
     video = raw.get("video", {})
+    ppo = raw.get("ppo", {})
 
     return ProjectConfig(
         run=RunConfig(
@@ -81,6 +99,20 @@ def load_config(path: str | Path) -> ProjectConfig:
             enabled=bool(video.get("enabled", False)),
             record_every=max(1, int(video.get("record_every", 1))),
             prefix=str(video.get("prefix", "episode")),
+        ),
+        ppo=PPOConfig(
+            total_timesteps=max(1, int(ppo.get("total_timesteps", 20_000))),
+            steps_per_rollout=max(1, int(ppo.get("steps_per_rollout", 2_048))),
+            gamma=float(ppo.get("gamma", 0.99)),
+            gae_lambda=float(ppo.get("gae_lambda", 0.95)),
+            learning_rate=float(ppo.get("learning_rate", 3e-4)),
+            update_epochs=max(1, int(ppo.get("update_epochs", 4))),
+            minibatch_size=max(1, int(ppo.get("minibatch_size", 64))),
+            clip_epsilon=float(ppo.get("clip_epsilon", 0.2)),
+            value_coef=float(ppo.get("value_coef", 0.5)),
+            entropy_coef=float(ppo.get("entropy_coef", 0.01)),
+            max_grad_norm=float(ppo.get("max_grad_norm", 0.5)),
+            log_every_updates=max(1, int(ppo.get("log_every_updates", 1))),
         ),
     )
 
