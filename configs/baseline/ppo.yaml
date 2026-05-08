@@ -34,3 +34,5 @@ ppo:
   entropy_coef: 0.01
   max_grad_norm: 0.5
   log_every_updates: 1
+  eval_every_updates: 5
+  eval_episodes: 20

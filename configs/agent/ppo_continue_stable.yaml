@@ -1,0 +1,38 @@
+run:
+  name: ppo_continue_stable
+  output_dir: results/ppo_continue_stable
+  episodes: 20
+  max_steps: 1000
+  seed: 0
+
+env:
+  id: LunarLander-v3
+  render_mode: null
+  continuous: false
+  enable_wind: false
+  wind_power: 15.0
+  turbulence_power: 1.5
+
+policy:
+  name: ppo
+
+video:
+  enabled: false
+  record_every: 10
+  prefix: ppo_continue_stable
+
+ppo:
+  total_timesteps: 50000
+  steps_per_rollout: 2048
+  gamma: 0.99
+  gae_lambda: 0.95
+  learning_rate: 0.0002
+  update_epochs: 6
+  minibatch_size: 128
+  clip_epsilon: 0.2
+  value_coef: 0.5
+  entropy_coef: 0.005
+  max_grad_norm: 0.5
+  log_every_updates: 5
+  eval_every_updates: 5
+  eval_episodes: 20

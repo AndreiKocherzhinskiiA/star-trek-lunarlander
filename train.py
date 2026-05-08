@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from start_trek.agent import PPOAgent
 from start_trek.baseline import (
+    Policy,
     build_policy,
     classify_termination,
     make_env,
@@ -63,6 +64,24 @@ def write_training_summary(summary: dict[str, object], path: Path) -> None:
         handle.write("\n")
 
 
+def evaluate_policy_mean_return(
+    config: ProjectConfig,
+    policy: Policy,
+    episodes: int,
+) -> float:
+    eval_config = replace(
+        config,
+        run=replace(config.run, episodes=episodes),
+        video=replace(config.video, enabled=False),
+    )
+    records = run_policy(
+        eval_config,
+        output_dir=config.run.output_dir / "_tmp_eval",
+        policy=policy,
+    )
+    return sum(record.return_ for record in records) / len(records)
+
+
 def train_ppo(
     config: ProjectConfig,
     env,
@@ -81,6 +100,8 @@ def train_ppo(
     completed_episode_returns: list[float] = []
     completed_episode_lengths: list[int] = []
     completed_episode_reasons: list[str] = []
+    best_eval_mean_return: float | None = None
+    best_checkpoint_path = target_dir / "agent_best.pt"
 
     total_steps = 0
     update = 0
@@ -204,6 +225,26 @@ def train_ppo(
             if rollout_completed_reasons
             else None
         )
+        eval_mean_return: float | None = None
+        if update % ppo_config.eval_every_updates == 0:
+            checkpoint_policy = build_policy(
+                "ppo",
+                env.observation_space,
+                env.action_space,
+            )
+            if not isinstance(checkpoint_policy, PPOAgent):
+                raise TypeError("Expected PPOAgent when building PPO evaluation policy.")
+            checkpoint_policy.model.load_state_dict(policy.model.state_dict())
+            checkpoint_policy.model.to("cpu")
+            checkpoint_policy.device = torch.device("cpu")
+            eval_mean_return = evaluate_policy_mean_return(
+                replace(config, run=replace(config.run, output_dir=target_dir)),
+                checkpoint_policy,
+                ppo_config.eval_episodes,
+            )
+            if best_eval_mean_return is None or eval_mean_return > best_eval_mean_return:
+                best_eval_mean_return = eval_mean_return
+                policy.save(best_checkpoint_path)
 
         metrics_rows.append(
             {
@@ -220,6 +261,8 @@ def train_ppo(
                 "value_loss": update_metrics["value_loss"],
                 "entropy": update_metrics["entropy"],
                 "approx_kl": update_metrics["approx_kl"],
+                "eval_mean_return": eval_mean_return,
+                "best_eval_mean_return": best_eval_mean_return,
             }
         )
 
@@ -244,6 +287,11 @@ def train_ppo(
                     ]
                 )
             )
+            if eval_mean_return is not None:
+                print(
+                    f"eval_mean_return={eval_mean_return:.2f} | "
+                    f"best_eval_mean_return={best_eval_mean_return:.2f}"
+                )
 
     checkpoint_dir = Path(target_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -277,6 +325,8 @@ def train_ppo(
             if completed_episode_reasons
             else None
         ),
+        "best_eval_mean_return": best_eval_mean_return,
+        "best_checkpoint_path": str(best_checkpoint_path) if best_eval_mean_return is not None else None,
     }
     write_training_summary(summary, checkpoint_dir / "training_summary.json")
     print(f"Saved trained agent to {checkpoint_path}")

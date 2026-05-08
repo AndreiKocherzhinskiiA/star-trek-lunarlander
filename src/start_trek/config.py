@@ -49,6 +49,8 @@ class PPOConfig:
     entropy_coef: float
     max_grad_norm: float
     log_every_updates: int
+    eval_every_updates: int
+    eval_episodes: int
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,8 @@ def load_config(path: str | Path) -> ProjectConfig:
             entropy_coef=float(ppo.get("entropy_coef", 0.01)),
             max_grad_norm=float(ppo.get("max_grad_norm", 0.5)),
             log_every_updates=max(1, int(ppo.get("log_every_updates", 1))),
+            eval_every_updates=max(1, int(ppo.get("eval_every_updates", 5))),
+            eval_episodes=max(1, int(ppo.get("eval_episodes", 20))),
         ),
     )
 
