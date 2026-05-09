@@ -13,7 +13,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from start_trek.agent import PPOAgent
+from start_trek.agent import PPOAgent, PPOPolicy
 from start_trek.baseline import (
     Policy,
     build_policy,
@@ -69,6 +69,9 @@ def evaluate_policy_mean_return(
     policy: Policy,
     episodes: int,
 ) -> float:
+    eval_policy = policy
+    if isinstance(policy, PPOAgent):
+        eval_policy = PPOPolicy(policy.model)
     eval_config = replace(
         config,
         run=replace(config.run, episodes=episodes),
@@ -77,7 +80,7 @@ def evaluate_policy_mean_return(
     records = run_policy(
         eval_config,
         output_dir=config.run.output_dir / "_tmp_eval",
-        policy=policy,
+        policy=eval_policy,
     )
     return sum(record.return_ for record in records) / len(records)
 
