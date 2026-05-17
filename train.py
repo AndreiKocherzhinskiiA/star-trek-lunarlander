@@ -22,6 +22,7 @@ from start_trek.baseline import (
     run_policy,
 )
 from start_trek.config import ProjectConfig, load_config
+from start_trek.repro import seed_everything
 
 
 def compute_gae(
@@ -341,6 +342,7 @@ def main() -> int:
     parser.add_argument("--config", required=True, help="Path to YAML config.")
     parser.add_argument("--output-dir", help="Override config output directory.")
     parser.add_argument("--agent-path", help="Path to saved agent checkpoint (for PPO).")
+    parser.add_argument("--seed", type=int, help="Override run seed from config.")
     parser.add_argument("--train", action="store_true", help="Run training loop instead of evaluation.")
     parser.add_argument(
         "--timesteps",
@@ -350,6 +352,11 @@ def main() -> int:
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.seed is not None:
+        config = replace(config, run=replace(config.run, seed=args.seed))
+
+    seed_everything(config.run.seed)
+
     output_dir = Path(args.output_dir) if args.output_dir else None
     target_dir = output_dir or config.run.output_dir
 
