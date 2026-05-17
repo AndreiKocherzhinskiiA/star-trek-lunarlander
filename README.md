@@ -55,6 +55,27 @@ Seed control covers:
 - PyTorch CPU
 - PyTorch CUDA when available
 
+One-command benchmark regeneration:
+
+```bash
+python scripts/reproduce.py
+```
+
+Default behavior:
+
+- evaluates `random`, `heuristic`, early PPO, and winning PPO
+- runs seeds `0..4`
+- uses `100` episodes per evaluation
+- regenerates per-run `config.json`, `episodes.csv`, `summary.csv`
+- regenerates per-run SVG plots from `episodes.csv`
+- writes aggregate artifacts under `results/repro_benchmark/`
+
+Aggregate repro outputs:
+
+- `benchmark_summary.csv`
+- `benchmark_summary.md`
+- `benchmark_summary.svg`
+
 ## Five-seed benchmark
 
 Benchmark setup:
@@ -104,6 +125,12 @@ Evaluate PPO:
 
 ```bash
 python eval.py --config configs/agent/ppo_refine_conservative.yaml --episodes 100 --agent-path results/ppo_refine_conservative/agent_best.pt
+```
+
+Rebuild benchmark artifacts:
+
+```bash
+python scripts/reproduce.py
 ```
 
 ## Key implementation notes
